@@ -1,0 +1,29 @@
+{
+  "name": "usocket",
+  "version": "0.0.1",
+  "description": "unix local sockets with descriptor passing",
+  "main": "index.js",
+  "scripts": {
+    "test": "mocha -R spec"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jhs67/usocket.git"
+  },
+  "keywords": [
+    "unix",
+    "local",
+    "socket",
+    "file",
+    "descriptor"
+  ],
+  "author": "Jon Spencer <jon@jonspencer.ca>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jhs67/usocket/issues"
+  },
+  "homepage": "https://github.com/jhs67/usocket#readme",
+  "devDependencies": {
+    "mocha": "^2.3.4"
+  }
+}
