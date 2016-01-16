@@ -37,7 +37,10 @@ USocket.prototype._write = function(chunk, encoding, callback) {
 	if (!this._wrap)
 		return callback(new Error("USocket not connected"));
 
-	if (this._wrap.write(chunk, null))
+	var r = this._wrap.write(chunk, null);
+	if (util.isError(r))
+		return callback(r);
+	else if (r)
 		return callback();
 
 	this._wrap.drain = this._write.bind(this, chunk, encoding, callback);
