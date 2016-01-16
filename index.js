@@ -40,7 +40,7 @@ USocket.prototype._write = function(chunk, encoding, callback) {
 	if (this._wrap.write(chunk, null))
 		return callback();
 
-	this._wrap.once('drain', this._write.bind(this, chunk, encoding, callback));
+	this._wrap.drain = this._write.bind(this, chunk, encoding, callback);
 };
 
 USocket.prototype.connect = function(opts, cb) {
@@ -95,6 +95,12 @@ USocket.prototype._wrapEvent = function(event, a0, a1) {
 			this.push(null);
 			this.maybeClose();
 		}
+	}
+
+	if (event === "drain") {
+		var d = this._wrap.drain;
+		this._wrap.drain = null;
+		if (d) d();
 	}
 };
 
