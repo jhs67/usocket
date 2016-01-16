@@ -223,7 +223,7 @@ namespace uwrap {
 		void _close() {
 			jscallback.Reset();
 			if (handle != -1) {
-				_pause();
+				uv_poll_stop(&uvpoll);
 				::close(handle);
 				handle = -1;
 			}

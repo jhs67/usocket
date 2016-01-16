@@ -76,7 +76,11 @@ USocket.prototype._wrapEvent = function(event, a0, a1) {
 	}
 
 	if (event === "error") {
+		debug("USocket error", a0);
+		this._wrap.close();
+		this._wrap = null;
 		this.emit("error", a0);
+		this.emit('close', a0);
 	}
 
 	if (event === "data") {
@@ -84,20 +88,41 @@ USocket.prototype._wrapEvent = function(event, a0, a1) {
 			if (!this.push(a0))
 				this._wrap.pause();
 		}
-		if (!a0 && !a1) {
+		if (!a0 && !a1 && !this._wrap.endReceived) {
 			debug("USocket end of stream received");
+			this._wrap.endReceived = true;
 			this._wrap.pause();
 			this.push(null);
+			this.maybeClose();
 		}
 	}
 };
 
 USocket.prototype.end = function(data, encoding, callback) {
 	stream.Duplex.prototype.end.call(this, data, encoding, callback);
-	if (this._wrap)
+	if (this._wrap) {
+		debug("USocket shutdown");
+		this._wrap.shutdownCalled = true;
 		this._wrap.shutdown();
+		this.read(0);
+		this.maybeClose();
+	}
 };
 
+USocket.prototype.destroy = function() {
+	if (!this._wrap)
+		return;
+	this._wrap.close();
+	this._wrap = null;
+};
+
+USocket.prototype.maybeClose = function() {
+	if (!this._wrap || !this._wrap.shutdownCalled || !this._wrap.endReceived)
+		return;
+	debug("USocket closing socket at end");
+	this.destroy();
+	this.emit('close');
+};
 
 //-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----
 //--
@@ -172,6 +197,9 @@ UServer.prototype._wrapEvent = function(event, a0, a1) {
 	}
 
 	if (event === "error") {
+		debug("UServer error", a0);
+		this._wrap.close();
+		this._wrap = null;
 		this.emit("error", a0);
 	}
 

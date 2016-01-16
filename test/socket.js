@@ -75,6 +75,39 @@ describe('socket', function() {
 		ssocket.write(send);
 	});
 
+	it("can orderly shut down", function(done) {
+		ssocket.on('error', done);
+		csocket.on('error', done);
+
+		var send = new Buffer("Hello There"), handle;
+
+		ssocket.on('readable', function() {
+			ssocket.read(0);
+		});
+		ssocket.on('end', function() {
+			ssocket.end(send);
+		});
+		ssocket.on('close', function() {
+			ssocket = null;
+			if (!csocket)
+				done();
+		});
+
+		var b;
+		csocket.on('readable', function() {
+			var l = csocket.read(send.length);
+			assert.notEqual(!l, !b);
+			if (l) b = l;
+		});
+		csocket.on('close', function() {
+			csocket = null;
+			if (!ssocket)
+				done();
+		});
+
+		csocket.end();
+	});
+
 	after(function() {
 		if (server) {
 			server.close();
