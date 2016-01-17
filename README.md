@@ -156,6 +156,12 @@ null. Otherwise the two argument read returns an object instead of a buffer.
   * data: the data read from the stream (as per the readable stream API)
   * fds: an array of file descriptors read from the stream
 
+### socket.unshift(buffer, fds)
+
+The `buffer` will put back on the the data read stream as per the readable
+stream interface. The optional `fds` is an array of file descriptors that
+will be put back onto the stream for subsequent reads.
+
 ### socket.write(buffer)
 
 Implements the writable stream API.

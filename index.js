@@ -169,6 +169,17 @@ USocket.prototype.read = function(size, fdSize) {
 	return { data: data, fds: fds };
 };
 
+USocket.prototype.unshift = function(chunk, fds) {
+	if (chunk) {
+		stream.Duplex.prototype.unshift.call(this, chunk);
+	}
+
+	if (Array.isArray(fds) && this._wrap) {
+		while (fds.length > 0)
+			this._wrap.fds.unshift(fds.pop);
+	}
+};
+
 USocket.prototype.write = function(chunk, encoding, callback) {
 	if (typeof encoding === 'function') {
 		callback = encoding;
