@@ -76,7 +76,12 @@ namespace uwrap {
 		}
 
 		bool isError() { return code != 0; }
-		v8::Handle<v8::Value> makeError();
+
+		v8::Handle<v8::Value> makeError() {
+			if (syscall.empty() || code < 0)
+				return Nan::Error(message.c_str());
+			return Nan::ErrnoException(code, syscall.c_str(), message.c_str(), path.c_str());
+		}
 
 		string syscall;
 		string message;
