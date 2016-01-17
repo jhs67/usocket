@@ -169,6 +169,23 @@ USocket.prototype.read = function(size, fdSize) {
 	return { data: data, fds: fds };
 };
 
+USocket.prototype.write = function(chunk, encoding, callback) {
+	if (typeof encoding === 'function') {
+		callback = encoding;
+		encoding = null;
+	}
+
+	if (typeof chunk === 'string') {
+		chunk = new Buffer(chunk);
+	}
+
+	if (Buffer.isBuffer(chunk)) {
+		chunk = { data: chunk };
+	}
+
+	stream.Duplex.prototype.write.call(this, chunk, null, callback);
+};
+
 USocket.prototype.end = function(data, encoding, callback) {
 	stream.Duplex.prototype.end.call(this, data, encoding, callback);
 	if (this._wrap) {
