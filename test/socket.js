@@ -9,12 +9,25 @@ describe('socket', function() {
 	var server, csocket, ssocket;
 	var socketpath = __dirname + "/test_socket";
 
+	function hookErrors(done) {
+		var hook = function(err) {
+			if (server) server.removeListener('error', hook);
+			if (csocket) csocket.removeListener('error', hook);
+			if (ssocket) ssocket.removeListener('error', hook);
+			done(err);
+		};
+		if (server) server.on('error', hook);
+		if (csocket) csocket.on('error', hook);
+		if (ssocket) ssocket.on('error', hook);
+		return hook;
+	}
+
 	it("can create a UServer", function() {
 		server = new usocket.UServer();
 	});
 
 	it("can listen on a path", function(done) {
-		server.on('error', done);
+		done = hookErrors(done);
 		server.listen(socketpath, function() {
 			server.removeListener('error', done);
 			done();
@@ -26,8 +39,7 @@ describe('socket', function() {
 	});
 
 	it("can connect the client and server", function(done) {
-		server.on('error', done);
-		csocket.on('error', done);
+		done = hookErrors(done);
 
 		var connected;
 		server.on('connection', function(sock) {
@@ -42,8 +54,7 @@ describe('socket', function() {
 	});
 
 	it("can send data from client to server", function(done) {
-		ssocket.on('error', done);
-		csocket.on('error', done);
+		done = hookErrors(done);
 
 		var send = new Buffer("Hello There"), handle;
 		ssocket.on('readable', handle = function() {
@@ -59,8 +70,7 @@ describe('socket', function() {
 	});
 
 	it("can send data from server to client", function(done) {
-		ssocket.on('error', done);
-		csocket.on('error', done);
+		done = hookErrors(done);
 
 		var send = new Buffer("Hello There"), handle;
 		csocket.on('readable', handle = function() {
