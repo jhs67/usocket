@@ -25,7 +25,7 @@ npm install usocket
 
 ```js
 var fs = require('fs');
-var usocket = require('./index.js');
+var usocket = require('usocket');
 
 var server = new usocket.UServer();
 var client = new usocket.USocket();
