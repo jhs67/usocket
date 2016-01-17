@@ -9,6 +9,9 @@ describe('socket', function() {
 	var server, csocket, ssocket;
 	var socketpath = __dirname + "/test_socket";
 
+	var filepath = __dirname + "/test_file";
+	var filecontents = new Buffer("USocket test file\n");
+
 	function hookErrors(done) {
 		var hook = function(err) {
 			if (server) server.removeListener('error', hook);
@@ -21,6 +24,10 @@ describe('socket', function() {
 		if (ssocket) ssocket.on('error', hook);
 		return hook;
 	}
+
+	before(function() {
+		fs.writeFileSync(filepath, filecontents);
+	});
 
 	it("can create a UServer", function() {
 		server = new usocket.UServer();
@@ -85,6 +92,36 @@ describe('socket', function() {
 		ssocket.write(send);
 	});
 
+	it("can send a fd from server to client", function(done) {
+		done = hookErrors(done);
+
+		var msg = new Buffer("Here you go");
+
+		fs.open(filepath, "r", function(err, fd) {
+			if (err) return done(err);
+			ssocket.write({ data: msg, fds: [ fd ], callback: function() { fs.close(fd); } });
+		});
+
+		var chandle;
+		csocket.on('readable', chandle = function() {
+			var m = csocket.read(msg.length, 1);
+			if (!m) return;
+			assert.deepEqual(m.data, msg);
+
+			assert.notEqual(m.fds, null);
+			assert.equal(m.fds.length, 1);
+			csocket.removeListener('readable', chandle);
+
+			var c = new Buffer(1024);
+			fs.read(m.fds[0], c, 0, c.length, 0, function(err, len) {
+				if (err) return done(err);
+				assert.deepEqual(c.slice(0, len), filecontents);
+				fs.close(m.fds[0]);
+				done();
+			});
+		});
+	});
+
 	it("can orderly shut down", function(done) {
 		ssocket.on('error', done);
 		csocket.on('error', done);
@@ -122,6 +159,7 @@ describe('socket', function() {
 		if (server) {
 			server.close();
 			fs.unlink(socketpath);
+			fs.unlinkSync(filepath);
 		}
 	});
 

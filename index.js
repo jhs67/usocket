@@ -14,7 +14,7 @@ exports.USocket = USocket;
 function USocket(opts, cb) {
 	opts = opts || {};
 
-	var duplexOpts = {};
+	var duplexOpts = { writableObjectMode: true };
 	if ("allowHalfOpen" in opts)
 		duplexOpts = opts.allowHalfOpen;
 	stream.Duplex.call(this, duplexOpts);
@@ -33,16 +33,43 @@ USocket.prototype._read = function(size) {
 };
 
 USocket.prototype._write = function(chunk, encoding, callback) {
-	debug("USocket._write", chunk.length);
 	if (!this._wrap)
 		return callback(new Error("USocket not connected"));
 
-	var r = this._wrap.write(chunk, null);
-	if (util.isError(r))
-		return callback(r);
-	else if (r)
-		return callback();
+	var data, fds, cb;
+	if (Buffer.isBuffer(chunk)) {
+		data = chunk;
+	}
+	else if (Array.isArray(chunk)) {
+		fds = chunk;
+	}
+	else {
+		cb = chunk.callback;
+		data = chunk.data;
+		fds = chunk.fds;
+	}
 
+	if (data && !Buffer.isBuffer(data))
+		return callback(new Error("USocket data needs to be a buffer"));
+	if (fds && !Array.isArray(fds))
+		return callback(new Error("USocket fds needs to be an array"));
+	if (cb && typeof cb !== 'function')
+		return callback(new Error("USocket write callback needs to be a function"));
+	if (!data && !fds)
+		return callback(new Error("USocket write needs a data or array"));
+
+	debug("USocket._write", data && data.length, fds);
+	var r = this._wrap.write(data, fds);
+	if (util.isError(r)) {
+		debug("USocket._write error", r);
+		return callback(r);
+	}
+	else if (r) {
+		if (cb) cb(chunk);
+		return callback();
+	}
+
+	debug("USocket._write wating");
 	this._wrap.drain = this._write.bind(this, chunk, encoding, callback);
 };
 
@@ -60,6 +87,11 @@ USocket.prototype.connect = function(opts, cb) {
 	debug("USocket connect", opts);
 
 	this._wrap = new uwrap.USocketWrap(this._wrapEvent.bind(this));
+	this._wrap.shutdownCalled = false;
+	this._wrap.endReceived = false;
+	this._wrap.drain = null;
+	this._wrap.fds = [];
+
 	if (typeof opts.fd === 'number') {
 		this._wrap.adopt(opts.fd);
 		this.fd = opts.fd;
@@ -87,10 +119,21 @@ USocket.prototype._wrapEvent = function(event, a0, a1) {
 	}
 
 	if (event === "data") {
+		if (a1 && a1.length > 0) {
+			debug("USocket received file descriptors", a1);
+			this._wrap.fds = this._wrap.fds.concat(a1);
+			this.emit('fds', a1);
+		}
+
 		if (a0) {
 			if (!this.push(a0))
 				this._wrap.pause();
 		}
+
+		if (a1 && !a0) {
+			this.emit('readable');
+		}
+
 		if (!a0 && !a1 && !this._wrap.endReceived) {
 			debug("USocket end of stream received");
 			this._wrap.endReceived = true;
@@ -105,6 +148,24 @@ USocket.prototype._wrapEvent = function(event, a0, a1) {
 		this._wrap.drain = null;
 		if (d) d();
 	}
+};
+
+USocket.prototype.read = function(size, fdSize) {
+	if (!this._wrap) return null;
+
+	if (typeof fdSize === 'undefined')
+		return stream.Duplex.prototype.read.apply(this, arguments);
+
+	if (fdSize === null)
+		fdSize = this._wrap.fds.length;
+	else if (this._wrap.fds.length < fdSize)
+		return null;
+
+	var data = stream.Duplex.prototype.read.call(this, size);
+	if (size && !data) return data;
+
+	var fds = this._wrap.fds.splice(0, fdSize);
+	return { data: data, fds: fds };
 };
 
 USocket.prototype.end = function(data, encoding, callback) {
