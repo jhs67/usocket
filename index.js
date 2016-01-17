@@ -12,7 +12,8 @@ var debug = require('debug')("usocket");
 
 exports.USocket = USocket;
 function USocket(opts, cb) {
-	opts = opts || {};
+	if (!opts || typeof opts !== 'object')
+		opts = { path: opts };
 
 	var duplexOpts = { writableObjectMode: true };
 	if ("allowHalfOpen" in opts)
