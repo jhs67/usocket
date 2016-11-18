@@ -99,7 +99,7 @@ describe('socket', function() {
 
 		fs.open(filepath, "r", function(err, fd) {
 			if (err) return done(err);
-			ssocket.write({ data: msg, fds: [ fd ], callback: function() { fs.close(fd); } });
+			ssocket.write({ data: msg, fds: [ fd ], callback: function() { fs.closeSync(fd); } });
 		});
 
 		var chandle;
@@ -116,7 +116,7 @@ describe('socket', function() {
 			fs.read(m.fds[0], c, 0, c.length, 0, function(err, len) {
 				if (err) return done(err);
 				assert.deepEqual(c.slice(0, len), filecontents);
-				fs.close(m.fds[0]);
+				fs.closeSync(m.fds[0]);
 				done();
 			});
 		});
@@ -158,7 +158,7 @@ describe('socket', function() {
 	after(function() {
 		if (server) {
 			server.close();
-			fs.unlink(socketpath);
+			fs.unlinkSync(socketpath);
 			fs.unlinkSync(filepath);
 		}
 	});
