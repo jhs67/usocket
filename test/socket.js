@@ -45,6 +45,17 @@ describe('socket', function() {
 		csocket = new usocket.USocket();
 	});
 
+	it("cannot connect the client with invalid fd", function(done) {
+		if (csocket) {
+			let hook = function() {
+				csocket.removeListener('error', hook);
+				return done();
+			}
+			csocket.on('error', hook)
+		};
+		csocket.connect({fd: -1}, function() {});
+	});
+
 	it("can connect the client and server", function(done) {
 		done = hookErrors(done);
 
