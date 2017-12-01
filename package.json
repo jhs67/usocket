@@ -1,6 +1,6 @@
 {
   "name": "usocket",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "unix local sockets with descriptor passing",
   "main": "index.js",
   "scripts": {

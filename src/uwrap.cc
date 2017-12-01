@@ -322,7 +322,10 @@ namespace uwrap {
 
 				paused = true;
 				handle = result.descriptor;
-				uv_poll_init(uv_default_loop(), &uvpoll, handle);
+				if (uv_poll_init(uv_default_loop(), &uvpoll, handle) < 0) {
+					callback("error", Nan::ErrnoException(-errno, "uv_poll_init", "USocket", PATH_LINE()));
+					return;
+				}
 
 				callback("listening", Nan::New(handle));
 			});
@@ -469,7 +472,10 @@ namespace uwrap {
 				paused = true;
 				corked = false;
 				handle = result.descriptor;
-				uv_poll_init(uv_default_loop(), &uvpoll, handle);
+				if (uv_poll_init(uv_default_loop(), &uvpoll, handle) < 0) {
+					callback("error", Nan::ErrnoException(-errno, "uv_poll_init", "USocket", PATH_LINE()));
+					return;
+				}
 
 				callback("connect", Nan::New(handle));
 			});
@@ -484,7 +490,10 @@ namespace uwrap {
 			handle = fd;
 			paused = true;
 			corked = false;
-			uv_poll_init(uv_default_loop(), &uvpoll, handle);
+			if (uv_poll_init(uv_default_loop(), &uvpoll, handle) < 0) {
+				callback("error", Nan::ErrnoException(-errno, "uv_poll_init", "USocket", PATH_LINE()));
+				return;
+			}
 		}
 
 		static NAN_METHOD(adopt) {
