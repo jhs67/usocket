@@ -195,10 +195,18 @@ namespace uwrap {
 				events |= UV_WRITABLE;
 
 			uvpoll.data = this;
-			if (events == 0)
-				uv_poll_stop(&uvpoll);
-			else
-				uv_poll_start(&uvpoll, events, UWrap::poll_thunk);
+			if (events == 0) {
+				if (uv_poll_stop(&uvpoll) < 0) {
+					callback("error", Nan::ErrnoException(-errno, "uv_poll_stop", "setupPoll", PATH_LINE()));
+					return;
+				}
+			}
+			else {
+				if (uv_poll_start(&uvpoll, events, UWrap::poll_thunk) < 0) {
+					callback("error", Nan::ErrnoException(-errno, "uv_poll_start", "setupPoll", PATH_LINE()));
+					return;
+				}
+			}
 		}
 
 		void _pause() {
@@ -230,7 +238,9 @@ namespace uwrap {
 		void _close() {
 			jscallback.Reset();
 			if (handle != -1) {
-				uv_poll_stop(&uvpoll);
+				if (uv_poll_stop(&uvpoll) < 0) {
+					callback("error", Nan::ErrnoException(-errno, "uv_poll_stop", "close", PATH_LINE()));
+				}
 				uv_close(reinterpret_cast<uv_handle_t*>(&uvpoll), nullptr);
 				::close(handle);
 				handle = -1;
