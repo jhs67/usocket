@@ -166,8 +166,10 @@ namespace uwrap {
 		}
 
 		~UWrap() {
-			if (handle != -1)
+			if (handle != -1) {
+				uv_close(reinterpret_cast<uv_handle_t*>(&uvpoll), nullptr);
 				::close(handle);
+			}
 		}
 
 		void callback(string msg, v8::Local<v8::Value> a0) {
@@ -229,6 +231,7 @@ namespace uwrap {
 			jscallback.Reset();
 			if (handle != -1) {
 				uv_poll_stop(&uvpoll);
+				uv_close(reinterpret_cast<uv_handle_t*>(&uvpoll), nullptr);
 				::close(handle);
 				handle = -1;
 			}
