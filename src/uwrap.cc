@@ -161,23 +161,25 @@ namespace uwrap {
 			}
 		}
 
-		UWrap() {
+		UWrap() : asyncResource("uwrap:UWrap") {
 			handle = -1;
 		}
 
 		~UWrap() {
-			if (handle != -1)
+			if (handle != -1) {
+				uv_close(reinterpret_cast<uv_handle_t*>(&uvpoll), nullptr);
 				::close(handle);
+			}
 		}
 
 		void callback(string msg, v8::Local<v8::Value> a0) {
 			v8::Local<v8::Value> argv[2] { Nan::New(msg.c_str()).ToLocalChecked(),  a0 };
-			Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(jscallback), 2, argv);
+			asyncResource.runInAsyncScope(Nan::GetCurrentContext()->Global(), Nan::New(jscallback), 2, argv);
 		}
 
 		void callback(string msg, v8::Local<v8::Value> a0, v8::Local<v8::Value> a1) {
 			v8::Local<v8::Value> argv[3] { Nan::New(msg.c_str()).ToLocalChecked(),  a0, a1 };
-			Nan::MakeCallback(Nan::GetCurrentContext()->Global(), Nan::New(jscallback), 3, argv);
+			asyncResource.runInAsyncScope(Nan::GetCurrentContext()->Global(), Nan::New(jscallback), 3, argv);
 		}
 
 		static void poll_thunk(uv_poll_t *handle, int status, int events) {
@@ -193,10 +195,18 @@ namespace uwrap {
 				events |= UV_WRITABLE;
 
 			uvpoll.data = this;
-			if (events == 0)
-				uv_poll_stop(&uvpoll);
-			else
-				uv_poll_start(&uvpoll, events, UWrap::poll_thunk);
+			if (events == 0) {
+				if (uv_poll_stop(&uvpoll) < 0) {
+					callback("error", Nan::ErrnoException(-errno, "uv_poll_stop", "setupPoll", PATH_LINE()));
+					return;
+				}
+			}
+			else {
+				if (uv_poll_start(&uvpoll, events, UWrap::poll_thunk) < 0) {
+					callback("error", Nan::ErrnoException(-errno, "uv_poll_start", "setupPoll", PATH_LINE()));
+					return;
+				}
+			}
 		}
 
 		void _pause() {
@@ -228,7 +238,10 @@ namespace uwrap {
 		void _close() {
 			jscallback.Reset();
 			if (handle != -1) {
-				uv_poll_stop(&uvpoll);
+				if (uv_poll_stop(&uvpoll) < 0) {
+					callback("error", Nan::ErrnoException(-errno, "uv_poll_stop", "close", PATH_LINE()));
+				}
+				uv_close(reinterpret_cast<uv_handle_t*>(&uvpoll), nullptr);
 				::close(handle);
 				handle = -1;
 			}
@@ -240,9 +253,11 @@ namespace uwrap {
 		}
 
 		int handle;
-		Nan::Persistent<v8::Function> jscallback;
 		uv_poll_t uvpoll;
 		bool paused;
+
+		Nan::AsyncResource asyncResource;
+		Nan::Persistent<v8::Function> jscallback;
 	};
 
 
