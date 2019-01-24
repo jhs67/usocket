@@ -10,7 +10,7 @@ describe('socket', function() {
 	var socketpath = __dirname + "/test_socket";
 
 	var filepath = __dirname + "/test_file";
-	var filecontents = new Buffer("USocket test file\n");
+	var filecontents = Buffer.from("USocket test file\n");
 
 	function hookErrors(done) {
 		var hook = function(err) {
@@ -74,7 +74,7 @@ describe('socket', function() {
 	it("can send data from client to server", function(done) {
 		done = hookErrors(done);
 
-		var send = new Buffer("Hello There"), handle;
+		var send = Buffer.from("Hello There"), handle;
 		ssocket.on('readable', handle = function() {
 			var b = ssocket.read(send.length);
 			if (b) {
@@ -90,7 +90,7 @@ describe('socket', function() {
 	it("can send data from server to client", function(done) {
 		done = hookErrors(done);
 
-		var send = new Buffer("Hello There"), handle;
+		var send = Buffer.from("Hello There"), handle;
 		csocket.on('readable', handle = function() {
 			var b = csocket.read(send.length);
 			if (b) {
@@ -106,7 +106,7 @@ describe('socket', function() {
 	it("can send a fd from server to client", function(done) {
 		done = hookErrors(done);
 
-		var msg = new Buffer("Here you go");
+		var msg = Buffer.from("Here you go");
 
 		fs.open(filepath, "r", function(err, fd) {
 			if (err) return done(err);
@@ -123,7 +123,7 @@ describe('socket', function() {
 			assert.equal(m.fds.length, 1);
 			csocket.removeListener('readable', chandle);
 
-			var c = new Buffer(1024);
+			var c = Buffer.alloc(1024);
 			fs.read(m.fds[0], c, 0, c.length, 0, function(err, len) {
 				if (err) return done(err);
 				assert.deepEqual(c.slice(0, len), filecontents);
@@ -137,7 +137,7 @@ describe('socket', function() {
 		ssocket.on('error', done);
 		csocket.on('error', done);
 
-		var send = new Buffer("Hello There"), handle;
+		var send = Buffer.from("Hello There"), handle;
 
 		ssocket.on('readable', function() {
 			ssocket.read(0);

@@ -35,7 +35,7 @@ server.listen(__dirname + "/socket", function() {
 });
 
 server.on('connection', function(connection) {
-  var msg = new Buffer("message");
+  var msg = Buffer.from("message");
   var fd = fs.openSync(__filename, "r");
   setTimeout(function() {
   	connection.end({ data: msg, fds: [fd], callback: function() { fs.close(fd); } });

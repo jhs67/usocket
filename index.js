@@ -187,7 +187,7 @@ USocket.prototype.write = function(chunk, encoding, callback) {
 	}
 
 	if (typeof chunk === 'string') {
-		chunk = new Buffer(chunk);
+		chunk = Buffer.from(chunk);
 	}
 
 	if (Buffer.isBuffer(chunk)) {
