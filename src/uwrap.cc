@@ -407,8 +407,9 @@ namespace uwrap {
 				std::vector<int> fds;
 				for (cmsghdr *c = CMSG_FIRSTHDR(&message); c != NULL; c = CMSG_NXTHDR(&message, c)) {
 					if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS) {
-						fds.emplace_back();
-						memcpy(&fds.back(), CMSG_DATA(c), sizeof(int));
+						int count = (c->cmsg_len - CMSG_LEN(sizeof(int))) / sizeof(int) + 1;
+						fds.resize(fds.size() + count);
+						memcpy(&fds.front() + fds.size() - count, CMSG_DATA(c), count * sizeof(int));
 					}
 				}
 
@@ -537,13 +538,11 @@ namespace uwrap {
 				message.msg_control = ctrlBuf.data();
 				message.msg_controllen = ctrlBuf.size();
 
-				size_t fdi = 0;
-				for (cmsghdr *c = CMSG_FIRSTHDR(&message); c != NULL; c = CMSG_NXTHDR(&message, c), fdi += 1) {
-					c->cmsg_level = SOL_SOCKET;
-					c->cmsg_type = SCM_RIGHTS;
-					c->cmsg_len = CMSG_LEN(sizeof(int));
-					memcpy(CMSG_DATA(c), &fds[fdi], sizeof(int));
-	 			}
+				cmsghdr *cmsg = CMSG_FIRSTHDR(&message);
+				cmsg->cmsg_level = SOL_SOCKET;
+				cmsg->cmsg_type = SCM_RIGHTS;
+				cmsg->cmsg_len = CMSG_LEN(fds.size() * sizeof(int));
+				memcpy(CMSG_DATA(cmsg), &fds[0], fds.size() * sizeof(int));
 			}
 
 			int ret = sendmsg(handle, &message, 0);

@@ -133,6 +133,46 @@ describe('socket', function() {
 		});
 	});
 
+	it("can send multiple fd's in a single send", function(done) {
+		done = hookErrors(done);
+
+		var msg = Buffer.from("Multiple fd's");
+
+		fs.open(filepath, "r", function(err, fd) {
+			if (err) return done(err);
+			fs.open(filepath, "r", function(err, fd1) {
+				if (err) return done(err);
+				ssocket.write({ data: msg, fds: [ fd, fd1 ], callback: function() {
+					fs.closeSync(fd); fs.closeSync(fd1); } });
+			});
+		});
+
+		var chandle;
+		csocket.on('readable', chandle = function() {
+			var m = csocket.read(msg.length, 2);
+			if (!m) return;
+			assert.deepEqual(m.data, msg);
+
+			assert.notEqual(m.fds, null);
+			assert.equal(m.fds.length, 2);
+			csocket.removeListener('readable', chandle);
+
+			var c = Buffer.alloc(1024);
+			fs.read(m.fds[0], c, 0, c.length, 0, function(err, len) {
+				if (err) return done(err);
+				assert.deepEqual(c.slice(0, len), filecontents);
+				fs.closeSync(m.fds[0]);
+
+				fs.read(m.fds[1], c, 0, c.length, 0, function(err, len) {
+					if (err) return done(err);
+					assert.deepEqual(c.slice(0, len), filecontents);
+					fs.closeSync(m.fds[1]);
+					done();
+				});
+			});
+		});
+	});
+
 	it("can orderly shut down", function(done) {
 		ssocket.on('error', done);
 		csocket.on('error', done);
