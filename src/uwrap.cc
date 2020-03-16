@@ -77,7 +77,7 @@ namespace uwrap {
 
 		bool isError() { return code != 0; }
 
-		v8::Handle<v8::Value> makeError() {
+		v8::Local<v8::Value> makeError() {
 			if (syscall.empty() || code < 0)
 				return Nan::Error(message.c_str());
 			return Nan::ErrnoException(code, syscall.c_str(), message.c_str(), path.c_str());
@@ -121,7 +121,7 @@ namespace uwrap {
 	template <typename SubClass>
 	struct UWrap : public Nan::ObjectWrap {
 
-		static void init(v8::Handle<v8::Object> target) {
+		static void init(v8::Local<v8::Object> target) {
 			v8::Local<v8::String> className = Nan::New(SubClass::className()).ToLocalChecked();
 			v8::Local<v8::FunctionTemplate> tpl = Nan::New<v8::FunctionTemplate>(New);
 			tpl->InstanceTemplate()->SetInternalFieldCount(1);
@@ -268,7 +268,7 @@ namespace uwrap {
 
 		static const char * className() { return "UServerWrap"; }
 
-		static void v8Init(v8::Handle<v8::FunctionTemplate> tpl) {
+		static void v8Init(v8::Local<v8::FunctionTemplate> tpl) {
 			SetPrototypeMethod(tpl, "listen", listen);
 		}
 
@@ -348,7 +348,7 @@ namespace uwrap {
 
 		static NAN_METHOD(listen) {
 			UServerWrap* wrap = Nan::ObjectWrap::Unwrap<UServerWrap>(info.Holder());
-			wrap->_listen(*Nan::Utf8String(info[0]), info[1]->Int32Value());
+			wrap->_listen(*Nan::Utf8String(info[0]), info[1]->Int32Value(Nan::GetCurrentContext()).FromMaybe(0));
 		}
 
 		ThreadWork<SocketResult> socketWork;
@@ -362,7 +362,7 @@ namespace uwrap {
 
 		static const char * className() { return "USocketWrap"; }
 
-		static void v8Init(v8::Handle<v8::FunctionTemplate> tpl) {
+		static void v8Init(v8::Local<v8::FunctionTemplate> tpl) {
 			SetPrototypeMethod(tpl, "connect", connect);
 			SetPrototypeMethod(tpl, "adopt", adopt);
 			SetPrototypeMethod(tpl, "write", write);
@@ -422,7 +422,7 @@ namespace uwrap {
 				if (fds.size() > 0) {
 					v8::Local<v8::Array> t = Nan::New<v8::Array>(fds.size());
 					for (size_t i = 0; i < fds.size(); i += 1)
-						t->Set(0, Nan::New(fds[i]));
+						Nan::Set(t, i, Nan::New(fds[i]));
 					jsfds = t;
 				}
 
@@ -513,7 +513,7 @@ namespace uwrap {
 
 		static NAN_METHOD(adopt) {
 			USocketWrap* wrap = Nan::ObjectWrap::Unwrap<USocketWrap>(info.Holder());
-			wrap->_adopt(info[0]->Int32Value());
+			wrap->_adopt(info[0]->Int32Value(Nan::GetCurrentContext()).FromMaybe(-1));
 		}
 
 		BoolResult _write(char *data, size_t len, vector<int> fds) {
@@ -567,7 +567,10 @@ namespace uwrap {
 			vector<int> fds;
 
 			if (node::Buffer::HasInstance(info[0])) {
-				v8::Local<v8::Object> databuf = info[0]->ToObject();
+				v8::MaybeLocal<v8::Object> mdatabuf = info[0]->ToObject(Nan::GetCurrentContext());
+				if (mdatabuf.IsEmpty())
+					return;
+				v8::Local<v8::Object> databuf = mdatabuf.ToLocalChecked();
 				len = node::Buffer::Length(databuf);
 				data = node::Buffer::Data(databuf);
 			}
@@ -575,8 +578,12 @@ namespace uwrap {
 			if (info[1]->IsArray()) {
 				v8::Local<v8::Array> jsfds = v8::Local<v8::Array>::Cast(info[1]);
 				fds.resize(jsfds->Length());
-				for (size_t i = 0; i < fds.size(); i += 1)
-					fds[i] = jsfds->Get(int32_t(i))->Int32Value();
+				for (size_t i = 0; i < fds.size(); i += 1) {
+					v8::MaybeLocal<v8::Value> mf = Nan::Get(jsfds, int32_t(i));
+					if (mf.IsEmpty())
+						return;
+					fds[i] = mf.ToLocalChecked()->Int32Value(Nan::GetCurrentContext()).FromMaybe(-1);
+				}
 			}
 
 			BoolResult ret = wrap->_write(data, len, move(fds));
