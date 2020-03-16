@@ -24,7 +24,7 @@
   },
   "homepage": "https://github.com/jhs67/usocket#readme",
   "devDependencies": {
-    "mocha": "^5.2.0"
+    "mocha": "^7.1.0"
   },
   "dependencies": {
     "bindings": "^1.5.0",
