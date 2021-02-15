@@ -17,7 +17,7 @@
 		},
 		{
 			"name": "Build",
-			"cmd": ["node-gyp", "build"],
+			"cmd": ["npm", "run", "build"],
 			"file_regex": "^\\.\\./(...*?):([0-9]*):?([0-9]*)",
 			"working_dir": "${project_path:${folder}}"
 		}

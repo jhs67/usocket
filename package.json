@@ -4,7 +4,10 @@
   "description": "unix local sockets with descriptor passing",
   "main": "index.js",
   "scripts": {
-    "test": "mocha -R spec"
+    "test": "mocha -R spec",
+    "configure": "node-gyp configure",
+    "build": "node-gyp build",
+    "rebuild": "node-gyp rebuild"
   },
   "repository": {
     "type": "git",
@@ -28,6 +31,7 @@
   },
   "dependencies": {
     "bindings": "^1.5.0",
-    "nan": "^2.14.2"
+    "nan": "^2.14.2",
+    "node-gyp": "^7.1.2"
   }
 }
