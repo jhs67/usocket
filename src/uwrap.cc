@@ -8,8 +8,6 @@
 #include <string>
 #include <vector>
 
-#include <v8.h>
-#include <node.h>
 #include <nan.h>
 
 namespace uwrap {
@@ -118,10 +116,35 @@ namespace uwrap {
 	//-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----
 	//--
 
+	struct UWrapBase : public Nan::ObjectWrap {
+		// lock for the async resource
+		static pthread_mutex_t async_lock;
+		static vector<Nan::AsyncResource*> dangling_async;
+
+		static void drain_dangles() {
+		    pthread_mutex_lock(&async_lock);
+		    while (!dangling_async.empty()) {
+		    	delete dangling_async.back();
+		    	dangling_async.pop_back();
+
+		    }
+		    pthread_mutex_unlock(&async_lock);
+		}
+	};
+
+
+	pthread_mutex_t UWrapBase::async_lock;
+	vector<Nan::AsyncResource*> UWrapBase::dangling_async;
+
+	//-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----
+	//--
+
 	template <typename SubClass>
-	struct UWrap : public Nan::ObjectWrap {
+	struct UWrap : public UWrapBase {
 
 		static void init(v8::Local<v8::Object> target) {
+			pthread_mutex_init(&async_lock, NULL);
+
 			v8::Local<v8::String> className = Nan::New(SubClass::className()).ToLocalChecked();
 			v8::Local<v8::FunctionTemplate> tpl = Nan::New<v8::FunctionTemplate>(New);
 			tpl->InstanceTemplate()->SetInternalFieldCount(1);
@@ -152,6 +175,7 @@ namespace uwrap {
 					return;
 				}
 				obj->jscallback.Reset(v8::Local<v8::Function>::Cast(info[0]));
+				obj->asyncResource = new Nan::AsyncResource("uwrap:UWrap");
 				info.GetReturnValue().Set(info.This());
 			} else {
 				const int argc = 1;
@@ -159,9 +183,11 @@ namespace uwrap {
 				v8::Local<v8::Function> cons = Nan::New(constructor());
 				info.GetReturnValue().Set(Nan::NewInstance(cons,argc, argv).ToLocalChecked());
 			}
+			drain_dangles();
 		}
 
-		UWrap() : asyncResource("uwrap:UWrap") {
+		UWrap() {
+			asyncResource = 0;
 			handle = -1;
 		}
 
@@ -170,16 +196,23 @@ namespace uwrap {
 				uv_close(reinterpret_cast<uv_handle_t*>(&uvpoll), nullptr);
 				::close(handle);
 			}
+			if (asyncResource != nullptr) {
+				// We are in the node garbage collector, so we can't delete the asyncResource here
+				// Make sure you call "close" on your sockets.
+			    pthread_mutex_lock(&async_lock);
+			    dangling_async.push_back(asyncResource);
+			    pthread_mutex_unlock(&async_lock);
+			}
 		}
 
 		void callback(string msg, v8::Local<v8::Value> a0) {
 			v8::Local<v8::Value> argv[2] { Nan::New(msg.c_str()).ToLocalChecked(),  a0 };
-			asyncResource.runInAsyncScope(Nan::GetCurrentContext()->Global(), Nan::New(jscallback), 2, argv);
+			asyncResource->runInAsyncScope(Nan::GetCurrentContext()->Global(), Nan::New(jscallback), 2, argv);
 		}
 
 		void callback(string msg, v8::Local<v8::Value> a0, v8::Local<v8::Value> a1) {
 			v8::Local<v8::Value> argv[3] { Nan::New(msg.c_str()).ToLocalChecked(),  a0, a1 };
-			asyncResource.runInAsyncScope(Nan::GetCurrentContext()->Global(), Nan::New(jscallback), 3, argv);
+			asyncResource->runInAsyncScope(Nan::GetCurrentContext()->Global(), Nan::New(jscallback), 3, argv);
 		}
 
 		static void poll_thunk(uv_poll_t *handle, int status, int events) {
@@ -237,6 +270,10 @@ namespace uwrap {
 
 		void _close() {
 			jscallback.Reset();
+			if (asyncResource != nullptr) {
+				delete asyncResource;
+				asyncResource = nullptr;
+			}
 			if (handle != -1) {
 				if (uv_poll_stop(&uvpoll) < 0) {
 					callback("error", Nan::ErrnoException(-errno, "uv_poll_stop", "close", PATH_LINE()));
@@ -245,6 +282,7 @@ namespace uwrap {
 				::close(handle);
 				handle = -1;
 			}
+			drain_dangles();
 		}
 
 		static NAN_METHOD(close) {
@@ -252,14 +290,26 @@ namespace uwrap {
 			wrap->_close();
 		}
 
+		int get_handle() { return handle; }
+
+		void set_handle_pause(int h) {
+			paused = true;
+			handle = h;
+		}
+
+		bool is_ready() { return !paused && handle >= 0; }
+
+		int poll_init() { return uv_poll_init(uv_default_loop(), &uvpoll, handle); }
+
+	private:
+
 		int handle;
 		uv_poll_t uvpoll;
 		bool paused;
 
-		Nan::AsyncResource asyncResource;
+		Nan::AsyncResource *asyncResource;
 		Nan::Persistent<v8::Function> jscallback;
 	};
-
 
 	//-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----
 	//--
@@ -281,8 +331,8 @@ namespace uwrap {
 				return;
 			}
 
-			while (!paused && handle >= 0) {
-				int rfd = accept(handle, nullptr, nullptr);
+			while (is_ready()) {
+				int rfd = accept(get_handle(), nullptr, nullptr);
 				if (rfd < 0) {
 					int err = errno;
 					if (err == EAGAIN || err == EWOULDBLOCK)
@@ -335,14 +385,13 @@ namespace uwrap {
 					return;
 				}
 
-				paused = true;
-				handle = result.descriptor;
-				if (uv_poll_init(uv_default_loop(), &uvpoll, handle) < 0) {
+				set_handle_pause(result.descriptor);
+				if (poll_init() < 0) {
 					callback("error", Nan::ErrnoException(-errno, "uv_poll_init", "USocket", PATH_LINE()));
 					return;
 				}
 
-				callback("listening", Nan::New(handle));
+				callback("listening", Nan::New(get_handle()));
 			});
 		}
 
@@ -370,10 +419,10 @@ namespace uwrap {
 		}
 
 		bool readLoop() {
-			while (!paused && handle >= 0) {
+			while (is_ready()) {
 				// Try to get a good sized buffer to read.
 				int avail = 1024;
-				if (ioctl(handle, FIONREAD, &avail) >= 0)
+				if (ioctl(get_handle(), FIONREAD, &avail) >= 0)
 					avail = std::min(std::max(avail + 64, 256), 16348);
 
 				// Build the message header.
@@ -392,7 +441,7 @@ namespace uwrap {
 				message.msg_iovlen = 1;
 
 				// Try to recv a message.
-				int res = recvmsg(handle, &message, 0);
+				int res = recvmsg(get_handle(), &message, 0);
 				if (res < 0) {
 					int err = errno;
 					free(iov[0].iov_base);
@@ -485,15 +534,14 @@ namespace uwrap {
 				}
 
 
-				paused = true;
+				set_handle_pause(result.descriptor);
 				corked = false;
-				handle = result.descriptor;
-				if (uv_poll_init(uv_default_loop(), &uvpoll, handle) < 0) {
+				if (poll_init() < 0) {
 					callback("error", Nan::ErrnoException(-errno, "uv_poll_init", "USocket", PATH_LINE()));
 					return;
 				}
 
-				callback("connect", Nan::New(handle));
+				callback("connect", Nan::New(get_handle()));
 			});
 		}
 
@@ -503,10 +551,9 @@ namespace uwrap {
 		}
 
 		void _adopt(int fd) {
-			handle = fd;
-			paused = true;
+			set_handle_pause(fd);
 			corked = false;
-			if (uv_poll_init(uv_default_loop(), &uvpoll, handle) < 0) {
+			if (poll_init() < 0) {
 				callback("error", Nan::ErrnoException(-errno, "uv_poll_init", "USocket", PATH_LINE()));
 				return;
 			}
@@ -545,7 +592,7 @@ namespace uwrap {
 				memcpy(CMSG_DATA(cmsg), &fds[0], fds.size() * sizeof(int));
 			}
 
-			int ret = sendmsg(handle, &message, 0);
+			int ret = sendmsg(get_handle(), &message, 0);
 			if (ret >= 0)
 				return BoolResult(true);
 
@@ -595,7 +642,7 @@ namespace uwrap {
 		}
 
 		void _shutdown() {
-			::shutdown(handle, SHUT_WR);
+			::shutdown(get_handle(), SHUT_WR);
 			corked = false;
 			setupPoll();
 		}
