@@ -617,4 +617,10 @@ namespace uwrap {
 
 } // uwrap
 
+#if defined(__GNUC__) && __GNUC__ >= 8
+_Pragma("GCC diagnostic push") _Pragma("GCC diagnostic ignored \"-Wcast-function-type\"")
+#endif
 NODE_MODULE(uwrap, uwrap::init)
+#if defined(__GNUC__) && __GNUC__ >= 8
+_Pragma("GCC diagnostic pop")
+#endif
