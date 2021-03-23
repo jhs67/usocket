@@ -515,9 +515,10 @@ namespace uwrap {
 
 				struct sockaddr_un addr = {};
 				addr.sun_family = AF_LOCAL;
-				strcpy(addr.sun_path, path.c_str());
+				memcpy(addr.sun_path, path.c_str(), path.size());
 
-				if (::connect(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
+
+				if (::connect(fd, reinterpret_cast<struct sockaddr*>(&addr), offsetof(struct sockaddr_un, sun_path) + path.size()) < 0) {
 					int err = errno;
 					::close(fd);
 					fd = -1;
@@ -547,7 +548,8 @@ namespace uwrap {
 
 		static NAN_METHOD(connect) {
 			USocketWrap* wrap = Nan::ObjectWrap::Unwrap<USocketWrap>(info.Holder());
-			wrap->_connect(*Nan::Utf8String(info[0]));
+			Nan::Utf8String path(info[0]);
+			wrap->_connect(string(*path, path.length()));
 		}
 
 		void _adopt(int fd) {
