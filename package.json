@@ -27,11 +27,11 @@
   },
   "homepage": "https://github.com/jhs67/usocket#readme",
   "devDependencies": {
-    "mocha": "^8.3.0"
+    "mocha": "^9.1.1"
   },
   "dependencies": {
     "bindings": "^1.5.0",
-    "nan": "^2.14.2",
+    "nan": "^2.15.0",
     "node-gyp": "^8.2.0"
   }
 }
