@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "bindings": "^1.5.0",
+    "debug": "^4.3.4",
     "nan": "^2.15.0",
     "node-gyp": "^9.0.0"
   }
