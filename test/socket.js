@@ -103,6 +103,22 @@ describe('socket', function() {
 		ssocket.write(send);
 	});
 
+	it("can send a lot of data from client to server", function(done) {
+		done = hookErrors(done);
+
+		var send = Buffer.from("Long Data!".repeat(50000)), handle;
+		ssocket.on('readable', handle = function() {
+			var b = ssocket.read(send.length);
+			if (b) {
+				ssocket.removeListener('readable', handle);
+				assert.deepEqual(b, send);
+				done();
+			}
+		});
+
+		csocket.write(send);
+	});
+
 	it("can send a fd from server to client", function(done) {
 		done = hookErrors(done);
 

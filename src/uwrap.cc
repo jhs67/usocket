@@ -104,12 +104,12 @@ namespace uwrap {
 	//-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----
 	//--
 
-	struct BoolResult : public ErrorResult {
+	struct SizeResult : public ErrorResult {
 		using ErrorResult::ErrorResult;
 
-		BoolResult(bool v) { ok = v; }
+		SizeResult(size_t v) { size = v; }
 
-		bool ok;
+		size_t size;
 	};
 
 
@@ -423,7 +423,7 @@ namespace uwrap {
 				// Try to get a good sized buffer to read.
 				int avail = 1024;
 				if (ioctl(get_handle(), FIONREAD, &avail) >= 0)
-					avail = std::min(std::max(avail + 64, 256), 16348);
+					avail = std::min(std::max(avail + 64, 256), 64 * 1024 * 1024);
 
 				// Build the message header.
 				char ctrlBuf[CMSG_SPACE(64 * sizeof(int))];
@@ -566,7 +566,7 @@ namespace uwrap {
 			wrap->_adopt(info[0]->Int32Value(Nan::GetCurrentContext()).FromMaybe(-1));
 		}
 
-		BoolResult _write(char *data, size_t len, vector<int> fds) {
+		SizeResult _write(char *data, size_t len, vector<int> fds) {
 
 			vector<char> ctrlBuf;
 			msghdr message = {};
@@ -575,36 +575,43 @@ namespace uwrap {
 			message.msg_name = nullptr;
 			message.msg_namelen = 0;
 
-			if (len != 0) {
-				iov[0].iov_base = data;
-				iov[0].iov_len = len;
-				message.msg_iov = iov;
-				message.msg_iovlen = 1;
+			size_t offset = 0;
+			while (offset < len || !fds.empty()) {
+				if (offset < len) {
+					iov[0].iov_base = data + offset;
+					iov[0].iov_len = len - offset;
+					message.msg_iov = iov;
+					message.msg_iovlen = 1;
+				}
+
+				if (!fds.empty()) {
+					ctrlBuf.resize(CMSG_SPACE(fds.size() * sizeof(int)));
+					message.msg_control = ctrlBuf.data();
+					message.msg_controllen = ctrlBuf.size();
+
+					cmsghdr *cmsg = CMSG_FIRSTHDR(&message);
+					cmsg->cmsg_level = SOL_SOCKET;
+					cmsg->cmsg_type = SCM_RIGHTS;
+					cmsg->cmsg_len = CMSG_LEN(fds.size() * sizeof(int));
+					memcpy(CMSG_DATA(cmsg), &fds[0], fds.size() * sizeof(int));
+				}
+
+				int ret = sendmsg(get_handle(), &message, 0);
+				if (ret < 0) {
+					int err = errno;
+					if (err != EAGAIN && err != EWOULDBLOCK)
+						return SizeResult(err, "sendmsg", "USocketWrap", PATH_LINE());
+
+					corked = true;
+					setupPoll();
+					break;
+				}
+
+				offset += ret;
+				fds.clear();
 			}
 
-			if (!fds.empty()) {
-				ctrlBuf.resize(CMSG_SPACE(fds.size() * sizeof(int)));
-				message.msg_control = ctrlBuf.data();
-				message.msg_controllen = ctrlBuf.size();
-
-				cmsghdr *cmsg = CMSG_FIRSTHDR(&message);
-				cmsg->cmsg_level = SOL_SOCKET;
-				cmsg->cmsg_type = SCM_RIGHTS;
-				cmsg->cmsg_len = CMSG_LEN(fds.size() * sizeof(int));
-				memcpy(CMSG_DATA(cmsg), &fds[0], fds.size() * sizeof(int));
-			}
-
-			int ret = sendmsg(get_handle(), &message, 0);
-			if (ret >= 0)
-				return BoolResult(true);
-
-			int err = errno;
-			if (err != EAGAIN && err != EWOULDBLOCK)
-				return BoolResult(err, "sendmsg", "USocketWrap", PATH_LINE());
-
-			corked = true;
-			setupPoll();
-			return BoolResult(false);
+			return SizeResult(offset);
 		}
 
 		static NAN_METHOD(write) {
@@ -634,12 +641,12 @@ namespace uwrap {
 				}
 			}
 
-			BoolResult ret = wrap->_write(data, len, move(fds));
+			SizeResult ret = wrap->_write(data, len, move(fds));
 			v8::Local<v8::Value> jsret;
 			if (ret.isError())
 				jsret = ret.makeError();
 			else
-				jsret = Nan::New(ret.ok);
+				jsret = Nan::New(double(ret.size));
 			info.GetReturnValue().Set(jsret);
 		}
 

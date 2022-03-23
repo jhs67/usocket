@@ -65,13 +65,14 @@ USocket.prototype._write = function(chunk, encoding, callback) {
 		debug("USocket._write error", r);
 		return callback(r);
 	}
-	else if (r) {
+	else if (!data || r == data.length) {
 		if (cb) cb(chunk);
 		return callback();
 	}
 
-	debug("USocket._write wating");
-	this._wrap.drain = this._write.bind(this, chunk, encoding, callback);
+	debug("USocket._write waiting");
+	this._wrap.drain = this._write.bind(this,
+		{ data: data.subarray(r), callback: cb  }, encoding, callback);
 };
 
 USocket.prototype.connect = function(opts, cb) {
