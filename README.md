@@ -110,7 +110,7 @@ methods. A USocket implements the Duplex stream interface.
 ### new usocket.USocket([options][, callback])
 
 Constructs a new USocket object. If the options object is provided, the
-[`connect`](#socketconnect) method will be called immeditately.
+[`connect`](#socketconnect) method will be called immediately.
 
 ### Event: 'connected'
 
@@ -131,10 +131,12 @@ events will be generated and no more data may be sent.
 This event is emitted as a readable stream and when there
 are new file descriptors available for reading.
 
-### socket.connect(path[, callback])
+### socket.connect(path | options[, callback])
 
 Connect to the unix domain server at the supplied path. The optional `callback`
-will be set as a listener of the `'connected'` event.
+will be set as a listener of the `'connected'` event. If you pass an options
+object for the first parameter, it can take the form { fd: number } to create
+a USocket object on an existing open file descriptor.
 
 ### socket.read([length])
 
